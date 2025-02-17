@@ -89,4 +89,59 @@ describe("Counter", function () {
       .to.emit(counter, "UserRecorded")
       .withArgs(owner.address, 1);
   });
+
+  it("Should accept payment for paid increment", async function () {
+    const incrementPrice = ethers.parseEther("0.001");
+    
+    await expect(counter.paidIncrement({ value: incrementPrice }))
+      .to.emit(counter, "PaidIncrement")
+      .withArgs(1, owner.address, incrementPrice);
+      
+    expect(await counter.getCount()).to.equal(1);
+    expect(await counter.getBalance()).to.equal(incrementPrice);
+  });
+
+  it("Should reject insufficient payment", async function () {
+    const insufficientPayment = ethers.parseEther("0.0005");
+    
+    await expect(counter.paidIncrement({ value: insufficientPayment }))
+      .to.be.revertedWith("Insufficient payment");
+  });
+
+  it("Should allow owner to set price", async function () {
+    const newPrice = ethers.parseEther("0.002");
+    
+    await counter.setIncrementPrice(newPrice);
+    expect(await counter.incrementPrice()).to.equal(newPrice);
+  });
+
+  it("Should not allow non-owner to set price", async function () {
+    const [, user1] = await ethers.getSigners();
+    const newPrice = ethers.parseEther("0.002");
+    
+    await expect(counter.connect(user1).setIncrementPrice(newPrice))
+      .to.be.revertedWith("Only owner can set price");
+  });
+
+  it("Should allow owner to withdraw funds", async function () {
+    const incrementPrice = ethers.parseEther("0.001");
+    
+    await counter.paidIncrement({ value: incrementPrice });
+    
+    const initialBalance = await ethers.provider.getBalance(owner.address);
+    const tx = await counter.withdraw();
+    const receipt = await tx.wait();
+    const gasUsed = receipt.gasUsed * receipt.gasPrice;
+    const finalBalance = await ethers.provider.getBalance(owner.address);
+    
+    expect(finalBalance).to.be.closeTo(initialBalance + incrementPrice - gasUsed, ethers.parseEther("0.0001"));
+    expect(await counter.getBalance()).to.equal(0);
+  });
+
+  it("Should not allow non-owner to withdraw", async function () {
+    const [, user1] = await ethers.getSigners();
+    
+    await expect(counter.connect(user1).withdraw())
+      .to.be.revertedWith("Only owner can withdraw");
+  });
 });
