@@ -5,13 +5,17 @@ contract Counter {
     uint256 private count;
     mapping(address => uint256) private userCounts;
     address[] private users;
+    uint256 public incrementPrice = 0.001 ether;
+    address public owner;
     
     event Incremented(uint256 newCount, address user);
     event Decremented(uint256 newCount, address user);
     event UserRecorded(address user, uint256 userCount);
+    event PaidIncrement(uint256 newCount, address user, uint256 amount);
     
     constructor() {
         count = 0;
+        owner = msg.sender;
     }
     
     function increment() public {
@@ -33,6 +37,28 @@ contract Counter {
     
     function reset() public {
         count = 0;
+    }
+    
+    function paidIncrement() public payable {
+        require(msg.value >= incrementPrice, "Insufficient payment");
+        count += 1;
+        _recordUser();
+        emit PaidIncrement(count, msg.sender, msg.value);
+        emit Incremented(count, msg.sender);
+    }
+    
+    function setIncrementPrice(uint256 _newPrice) public {
+        require(msg.sender == owner, "Only owner can set price");
+        incrementPrice = _newPrice;
+    }
+    
+    function withdraw() public {
+        require(msg.sender == owner, "Only owner can withdraw");
+        payable(owner).transfer(address(this).balance);
+    }
+    
+    function getBalance() public view returns (uint256) {
+        return address(this).balance;
     }
     
     function _recordUser() private {
